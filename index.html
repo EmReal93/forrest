@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<title>The Road Not Taken</title>
+
+<link rel="preconnect" href="https://fonts.googleleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lancelot&display=swap" rel="stylesheet">
+
+<style>
+:root{--bg:#1b1608;--ink:#fff6dc;--glow:rgba(30,18,0,.9)}
+@media(prefers-color-scheme:dark){:root{--bg:#120e05}}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg)}
+canvas{display:block}
+.ov{position:fixed;left:0;right:0;text-align:center;color:var(--ink);text-shadow:0 1px 14px var(--glow),0 0 4px var(--glow);font-family:'Lancelot',Georgia,'Times New Roman',serif;pointer-events:none;transition:opacity .5s;padding:0 16px;box-sizing:border-box}
+#title{top:calc(8vh + env(safe-area-inset-top,0px))}
+#title h1{font-size:clamp(34px,7vw,72px);font-weight:400;font-style:normal;margin:0 0 6px;letter-spacing:.01em}
+#title p{margin:4px 0;font-size:clamp(16px,2.4vw,21px);line-height:1.5}
+#choose,#end{bottom:calc(28px + env(safe-area-inset-bottom,0px));opacity:0;font-size:clamp(16px,2.4vw,21px);font-style:normal}
+#end{bottom:auto;top:38vh;font-size:clamp(22px,3.6vw,34px)}
+#end small{display:block;margin-top:10px;font-size:.6em;font-style:normal;opacity:.8}
+</style>
+</head>
+<body>
+
+<div class="ov" id="title"><h1>The Road Not Taken</h1>
+	<p>Robert Frost, 1916</p>
+	<p>Hold the up arrow to walk.</p>
+</div>
+<div class="ov" id="choose">Left or right arrow: choose your road</div>
+<div class="ov" id="end">Robert Frost, 1916<small>Press R to walk again</small></div>
+
+logic steps
+1)have the poem laid out in sections to be displayed as the user moves through the path.
+2)make sure there are forward moving buttons, as well as a restart button and the choice for which path to go on
+3)have the 3d imagry set up to have it start out dark and spooky 
+4)have the forrest slowly brighten as it goes on the poem
+5)have a split path to follow the story, have buttons to choose which side to go down(they dont really matter)
+6)have the ending be fully bright and have a rainbow show up to connect to the story.
+7)have a button to restart the path again.
+-all p5.js was coded by ai, but I handtyped it all myself and added notes inline to be able to learn to do it myself. /* chat for the p5.js:https://claude.ai/share/dbdbc29a-e9a2-46ef-91a4-799675b8191c
+*/
+-I did not use the js mentor for the rest of it, but I did google many things. 
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+
+<script>
+//this is the poem and how it shows up on the road
+const POEM=[
+["Two roads diverged in a yellow wood,","And sorry I could not travel both","And be one traveler, long I stood","And looked down one as far as I could","To where it bent in the undergrowth;"],
+["Then took the other, as just as fair,","And having perhaps the better claim,","Because it was grassy and wanted wear;","Though as for that the passing there","Had worn them really about the same,"],
+["And both that morning equally lay","In leaves no step had trodden black.","Oh, I kept the first for another day!","Yet knowing how way leads on to way,","I doubted if I should ever come back."],
+["I shall be telling this with a sigh","Somewhere ages and ages hence:","Two roads diverged in a wood, and I\u2014","I took the one less traveled by,","And that has made all the difference."]];
+
+const GAP=560,FORK=3000,END_Z=FORK+2400,FAR=2700,CAMH=100,CELL=70,W0=150;
+
+const lines=[];
+POEM.forEach((st,i)=>st.forEach((t,j)=>lines.push({t,z:900+(i*5+j)*GAP+i*400})));
+
+const LAST=lines[lines.length-1].z;
+
+let dist,vel,choice,locked,seed,leaves,f,horizon,camX,bob,fogc;
+
+let pathCol,wornCol,grassCol,trunkCol,treePal,leafPal,mood=0,DK,BR;
+
+
+//these control the differnt things 
+const $=id=>document.getElementById(id);
+
+const R=n=>{const x=Math.sin(n*127.1+seed*311.7)*43758.5453;return x-Math.floor(x)};
+
+const sm=t=>{t=constrain(t,0,1);return t*t*(3-2*t)};
+
+const C=z=>(noise(z*0.0011+7)-0.5)*900;
+
+const SP=z=>270*sm((z-FORK)/800);
+
+const roadX=(sd,z)=>C(z)+sd*SP(z);
+
+const fogAmt=d=>constrain(pow(d/FAR,0.75),0,0.95);
+
+const fogMix=(c,d)=>lerpColor(c,fogc,fogAmt(d));
+
+
+//this part is the colors and the start of the game, also the randomizing of the path, plus the restart
+function setup(){
+  createCanvas(windowWidth,windowHeight);
+  document.fonts.load('32px Lancelot');
+  
+  const c=(r,g,b)=>color(r,g,b);
+  DK={fog:c(34,42,40),skyT:c(12,18,22),skyH:c(34,44,42),tl:c(20,28,26),gM:c(40,48,28),gB:c(14,20,12),path:c(84,66,44),worn:c(66,52,36),grass:c(52,68,34),trunk:c(26,19,15),bush:c(28,42,26),
+    trees:[c(18,40,30),c(24,50,36),c(30,56,34),c(20,36,38),c(36,58,44)],leaves:[c(112,92,42),c(92,58,32),c(70,42,30),c(80,86,42)]};
+  BR={fog:c(255,243,200),skyT:c(120,200,245),skyH:c(255,246,214),tl:c(130,196,110),gM:c(150,200,80),gB:c(70,150,50),path:c(222,186,120),worn:c(204,164,102),grass:c(118,196,64),trunk:c(120,86,54),bush:c(90,160,56),
+    trees:[c(70,150,70),c(88,170,80),c(60,140,90),c(110,180,70),c(80,160,100)],leaves:[c(255,214,70),c(255,160,70),c(250,142,172),c(170,226,90)]};
+  setMood(0);
+  init();
+}
+
+function init(){
+  seed=random(1000);noiseSeed(seed);
+  dist=0;vel=0;choice=1;locked=false;bob=0;
+  leaves=[];
+  for(let i=0;i<45;i++)leaves.push({x:random(width),y:random(height),r:random(TWO_PI),s:random(5,10),v:random(.6,1.5),w:random(TWO_PI),c:floor(random(leafPal.length))});
+  layout();
+}
+
+function setMood(m){
+  mood=m;
+  const L=k=>lerpColor(DK[k],BR[k],m);
+  fogc=L('fog');pathCol=L('path');wornCol=L('worn');grassCol=L('grass');trunkCol=L('trunk');
+  treePal=DK.trees.map((c,i)=>lerpColor(c,BR.trees[i],m));
+  leafPal=DK.leaves.map((c,i)=>lerpColor(c,BR.leaves[i],m));
+}
+
+function layout(){f=min(width*0.9,height*1.1);horizon=height*0.42}
+
+function windowResized(){resizeCanvas(windowWidth,windowHeight);layout()}
+
+function keyPressed(){
+  if(key==='r'||key==='R')init();
+  if([UP_ARROW,DOWN_ARROW,LEFT_ARROW,RIGHT_ARROW,32].includes(keyCode))return false;
+}
+
+
+//this part makes the game run and has the moving buttons
+function draw(){
+  const up=keyIsDown(UP_ARROW)||keyIsDown(87)||mouseIsPressed;
+  if(!locked){
+    if(mouseIsPressed){if(mouseX<width/3)choice=-1;else if(mouseX>width*2/3)choice=1}
+    if(keyIsDown(LEFT_ARROW)||keyIsDown(65))choice=-1;
+    if(keyIsDown(RIGHT_ARROW)||keyIsDown(68))choice=1;
+    if(dist>=FORK-500)locked=true;
+  }
+  
+  vel=lerp(vel,up?4:0,0.06);
+  
+  dist+=vel*(deltaTime/16.7);
+  
+  camX=roadX(choice,dist);
+  
+  bob=sin(dist*0.045)*min(vel,2)*1.6;
+
+  setMood(sm((dist-(LAST-4300))/5000));
+  
+  backdrop();
+  
+  rainbow();
+  
+  const roads=[{id:0,cx:C,wf:()=>W0,z0:0,z1:FORK+14,col:pathCol}];
+  for(const sd of [-1,1]){
+    const gone=sd!==choice;
+    roads.push({id:sd+2,cx:z=>roadX(sd,z),wf:gone?z=>W0*(1-sm((z-(END_Z-800))/800)):()=>W0,z0:FORK,z1:gone?END_Z:1e9,col:sd<0?wornCol:pathCol,grass:sd>0});
+  }
+  roads.forEach(r=>strip(r.cx,r.wf,r.z0,r.z1,r.col,1));
+  roads.filter(r=>r.grass).forEach(r=>strip(r.cx,r.wf,r.z0,r.z1,grassCol,0.4));
+  roads.forEach(leavesOn);
+  drawTrees();
+  drawFalling();
+  atmosphere();
+  drawText();
+  $('title').style.opacity=constrain(1-dist/220,0,1);
+  $('choose').style.opacity=(!locked&&dist>FORK-2200)?1:0;
+  $('end').style.opacity=constrain((dist-(LAST-300))/400,0,1);
+}
+
+
+//this is the 3d background part! leave alone!************************************
+function backdrop(){
+  const ctx=drawingContext;
+  let g=ctx.createLinearGradient(0,0,0,horizon);
+  g.addColorStop(0,lerpColor(DK.skyT,BR.skyT,mood).toString());g.addColorStop(1,lerpColor(DK.skyH,BR.skyH,mood).toString());
+  ctx.fillStyle=g;ctx.fillRect(0,0,width,horizon+1);
+  noStroke();fill(lerpColor(DK.tl,BR.tl,mood));
+  beginShape();vertex(0,horizon+2);
+  for(let x=0;x<=width+10;x+=10)vertex(x,horizon-8-noise(x*0.02+camX*0.001+50)*40);
+  vertex(width+10,horizon+2);endShape(CLOSE);
+  g=ctx.createLinearGradient(0,horizon,0,height);
+  g.addColorStop(0,fogc.toString());g.addColorStop(0.35,lerpColor(DK.gM,BR.gM,mood).toString());g.addColorStop(1,lerpColor(DK.gB,BR.gB,mood).toString());
+  ctx.fillStyle=g;ctx.fillRect(0,horizon,width,height-horizon);
+}
+function P(x,w,z){const d=z-dist,s=f/d;return{x:width/2+(x-camX)*s,y:horizon+f*(CAMH+bob)/d,h:w*s/2}}
+function strip(cx,wf,z0,z1,col,ws){
+  noStroke();
+  const end=Math.min(z1,dist+FAR);
+  for(let z=Math.ceil(Math.max(z0,dist+30)/14)*14;z<end;z+=14){
+    const a=P(cx(z),wf(z)*ws,z),b=P(cx(z+14),wf(z+14)*ws,z+14);
+    fill(fogMix(col,z-dist));
+    quad(a.x-a.h,a.y,a.x+a.h,a.y,b.x+b.h,b.y,b.x-b.h,b.y);
+  }
+}
+//trees and bushes and the ground leaves
+function leavesOn(r){
+  const a=Math.max(r.z0,dist+40),b=Math.min(r.z1,dist+FAR*0.7);
+  noStroke();
+  for(let k=Math.ceil(a/24);k*24<b;k++){
+    for(let n=0;n<2;n++){
+      const z=k*24+R(k+n*9)*24;
+      if(z<r.z0||z>r.z1)continue;
+      const d=z-dist,s=f/d,w=r.wf(z);
+      const p=P(r.cx(z)+(R(k*5+n+r.id)-0.5)*w*0.9,0,z);
+      fill(fogMix(leafPal[Math.floor(R(k*17+n*3+r.id*101)*leafPal.length)],d));
+      ellipse(p.x,p.y,11*s,3*s);
+    }
+  }
+}
+function drawTrees(){
+  const k1=Math.floor((dist+30)/CELL),k0=Math.floor((dist+FAR)/CELL),bushK=Math.floor((END_Z+40)/CELL);
+  noStroke();
+  for(let k=k0;k>=k1;k--){
+    const z=k*CELL+R(k)*CELL,d=z-dist;
+    if(d<30)continue;
+    if(k===bushK)bushes(roadX(-choice,END_Z+40),END_Z+40);
+    for(let n=0;n<4;n++){
+      if(R(k*13+n*5+1)<0.3)continue;
+      const sd=n%2?1:-1,far=n>1;
+      const off=(far?520:200)+SP(z)+R(k*7+n)*(far?900:300);
+      tree(C(z)+sd*off,z,d,treePal[Math.floor(R(k*3+n*11)*treePal.length)],230+R(k*19+n)*180);
+    }
+    if(R(k*7+3)>0.5){
+      const sd=R(k+4)>0.5?1:-1,wx=C(z)+sd*(130+SP(z)+R(k*2)*140);
+      const s=f/d,x=width/2+(wx-camX)*s,y=horizon+f*(CAMH+bob)/d;
+      fill(fogMix(grassCol,d));ellipse(x,y-14*s,70*s,44*s);
+    }
+    undergrowth(k,z,d);
+  }
+}
+
+function tree(wx,z,d,col,h){
+  const s=f/d,x=width/2+(wx-camX)*s,y=horizon+f*(CAMH+bob)/d;
+  if(x+100*s<0||x-100*s>width)return;
+  const H=h*1.4,wsc=0.8+R(z*0.77)*0.45,n=6,seg=(H-60)/n;
+  const tw=18*s;
+  fill(fogMix(trunkCol,d));rect(x-tw/2,y-90*s,tw,90*s);
+  const lit=fogMix(col,d),shade=lerpColor(lit,color(0),0.32);
+  for(let i=0;i<n;i++){
+    const hw=80*wsc*(1-i/n*0.8)*s,yb=y-(45+i*seg)*s,ya=yb-seg*1.75*s;
+    const sx=R(z+i*2.1)*6*s-3*s;
+    fill(lit);
+    beginShape();vertex(x+sx,ya);vertex(x+hw,yb);vertex(x+hw*0.5,yb-9*s);vertex(x,yb+4*s);vertex(x-hw*0.5,yb-9*s);vertex(x-hw,yb);endShape(CLOSE);
+    fill(shade);
+    beginShape();vertex(x+sx,ya);vertex(x+hw,yb);vertex(x+hw*0.5,yb-9*s);vertex(x,yb+4*s);endShape(CLOSE);
+  }
+}
+function bushes(wx,z){
+  const d=z-dist;if(d<30)return;
+  const s=f/d,x=width/2+(wx-camX)*s,y=horizon+f*(CAMH+bob)/d;
+  fill(fogMix(lerpColor(DK.bush,BR.bush,mood),d));
+  for(let i=0;i<7;i++)ellipse(x+(i-3)*34*s,y-(30+(i%3)*22)*s,90*s,80*s);
+}
+
+
+//leaves and grass things 
+function drawFalling(){
+  noStroke();
+  for(const l of leaves){
+    l.y+=l.v;l.w+=0.03;l.x+=sin(l.w)*0.7;l.r+=0.02;
+    if(l.y>height+10){l.y=-10;l.x=random(width)}
+    push();translate(l.x,l.y);rotate(l.r);fill(leafPal[l.c]);ellipse(0,0,l.s,l.s*0.45);pop();
+  }
+}
+
+function undergrowth(k,z,d){
+  const s=f/d,y=horizon+f*(CAMH+bob)/d;
+  const base=fogMix(grassCol,d),dk=lerpColor(base,color(0),0.28);
+  const fl=constrain((mood-0.4)*2,0,1)*255;
+  for(let n=0;n<6;n++){
+    if(R(k*29+n*7+2)<0.15)continue;
+    const sd=n%2?1:-1,wx=C(z)+sd*(105+SP(z)+R(k*31+n)*(n>1?560:200));
+    const x=width/2+(wx-camX)*s;
+    if(x<-100*s||x>width+100*s)continue;
+    const kind=Math.floor(R(k*37+n)*4);
+    if(kind===0){
+      fill(dk);ellipse(x,y-26*s,130*s,70*s);
+      fill(base);ellipse(x-30*s,y-42*s,80*s,58*s);ellipse(x+30*s,y-38*s,84*s,60*s);ellipse(x,y-58*s,70*s,50*s);
+    }else if(kind===1||kind===3){
+      fill(dk);ellipse(x,y-18*s,90*s,50*s);
+      fill(base);ellipse(x-18*s,y-30*s,60*s,40*s);ellipse(x+22*s,y-26*s,56*s,38*s);
+      if(fl>5){
+        const pc=[[255,120,170],[255,226,80],[255,255,255],[200,150,255]][(k+n)%4];
+        fill(pc[0],pc[1],pc[2],fl);
+        for(let i=0;i<4;i++)ellipse(x+(i-1.5)*18*s,y-(28+(i%2)*14)*s,7*s,7*s);
+      }
+    }else{
+      fill(base);
+      for(let i=0;i<7;i++){const bx=x+(i-3)*7*s;triangle(bx-3*s,y,bx+3*s,y,bx+(R(k+i+n)-0.5)*16*s,y-(32+R(k*3+i)*30)*s);}
+    }
+  }
+}
+
+//raindow and the lightning effect 
+function rainbow(){
+  const a=constrain((mood-0.72)/0.28,0,1);if(a<0.01)return;
+  const cx=width*0.58,cy=horizon+8,r0=min(width*0.5,height*0.62),bw=r0/20;
+  noFill();
+  [[255,70,70],[255,150,50],[255,228,70],[100,205,100],[70,150,255],[140,100,225]].forEach((c,i)=>{
+    stroke(c[0],c[1],c[2],a*150);strokeWeight(bw+1);
+    arc(cx,cy,(r0-i*bw)*2,(r0-i*bw)*2,PI,TWO_PI);
+  });
+  noStroke();
+}
+function atmosphere(){
+  const ctx=drawingContext,m=mood;
+  let g=ctx.createRadialGradient(width/2,height*0.5,min(width,height)*0.25,width/2,height*0.5,max(width,height)*0.75);
+  g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(4,8,6,'+(0.7*(1-m)).toFixed(3)+')');
+  ctx.fillStyle=g;ctx.fillRect(0,0,width,height);
+  if(m>0.02){
+    g=ctx.createRadialGradient(width/2,horizon,0,width/2,horizon,max(width,height)*0.6);
+    g.addColorStop(0,'rgba(255,240,170,'+(0.55*m).toFixed(3)+')');g.addColorStop(1,'rgba(255,240,170,0)');
+    ctx.fillStyle=g;ctx.fillRect(0,0,width,height);
+  }
+}
+
+//poem
+function drawText(){
+  const ctx=drawingContext;
+  textAlign(CENTER,CENTER);textFont('Lancelot, Georgia, serif');textStyle(NORMAL);noStroke();
+  ctx.shadowColor='rgba(30,18,0,0.85)';ctx.shadowBlur=12;
+  for(const L of lines){
+    const d=L.z-dist;
+    if(d>GAP+560||d<300)continue;
+    const a=constrain(map(d,GAP+520,GAP+340,0,1),0,1)*constrain(map(d,520,340,1,0),0,1);
+    if(a<0.01)continue;
+    const s=f/d;
+    textSize(32*s);
+    fill(255,248,225,a*255);
+    const x=width/2+(C(L.z)-C(dist))*s*0.3,y=horizon-70*s;
+    text(L.t,x,y);text(L.t,x,y);
+  }
+  ctx.shadowBlur=0;
+}
+
+
+</script>
+</body>
+</html>
