@@ -33,7 +33,11 @@ canvas{display:block}
 <div class="ov" id="choose">Left or right arrow: choose your road</div>
 <div class="ov" id="end">Robert Frost, 1916<small>Press R to walk again</small></div>
 
-logic steps
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+
+<script>
+/*logic steps
 1)have the poem laid out in sections to be displayed as the user moves through the path.
 2)make sure there are forward moving buttons, as well as a restart button and the choice for which path to go on
 3)have the 3d imagry set up to have it start out dark and spooky 
@@ -42,13 +46,8 @@ logic steps
 6)have the ending be fully bright and have a rainbow show up to connect to the story.
 7)have a button to restart the path again.
 -all p5.js was coded by ai, but I handtyped it all myself and added notes inline to be able to learn to do it myself. /* chat for the p5.js:https://claude.ai/share/dbdbc29a-e9a2-46ef-91a4-799675b8191c
-*/
--I did not use the js mentor for the rest of it, but I did google many things. 
+-I did not use the js mentor for the rest of it, but I did google many things. */
 
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
-
-<script>
 //this is the poem and how it shows up on the road
 const POEM=[
 ["Two roads diverged in a yellow wood,","And sorry I could not travel both","And be one traveler, long I stood","And looked down one as far as I could","To where it bent in the undergrowth;"],
@@ -68,7 +67,7 @@ let dist,vel,choice,locked,seed,leaves,f,horizon,camX,bob,fogc;
 let pathCol,wornCol,grassCol,trunkCol,treePal,leafPal,mood=0,DK,BR;
 
 
-//these control the differnt things 
+//these controls the differnt things 
 const $=id=>document.getElementById(id);
 
 const R=n=>{const x=Math.sin(n*127.1+seed*311.7)*43758.5453;return x-Math.floor(x)};
